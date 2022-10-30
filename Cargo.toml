@@ -35,11 +35,12 @@ runtime-rng = ["getrandom"]
 # If this is on (and runtime-rng is off) it implies the produced binary will not be identical.
 # If this is disabled and runtime-rng is unavailable constant keys are used.
 compile-time-rng = ["const-random"]
-vaes = []
 
 # in case this is being used on an architecture lacking core::sync::atomic::AtomicUsize and friends
 atomic-polyfill = [ "dep:atomic-polyfill", "once_cell/atomic-polyfill"]
 
+# Use VAES extension on x86-64 targets if possible
+vaes = []
 [[bench]]
 name = "ahash"
 path = "tests/bench.rs"

@@ -101,7 +101,7 @@ impl AHasher {
         result[0]
     }
 
-    #[cfg(not(feature = "vaes"))]
+    #[cfg(not(all(target_feature = "avx512vaes", feature = "vaes")))]
     #[inline]
     fn parallel_encode(&mut self, data: &mut &[u8]) {
         let tail = data.read_last_u128x4();
@@ -131,10 +131,9 @@ impl AHasher {
         self.hash_in(add_by_64s(sum[0].convert(), sum[1].convert()).convert());
     }
 
-    #[cfg(feature = "vaes")]
-    #[inline(never)]
+    #[cfg(all(target_feature = "avx512vaes", feature = "vaes"))]
+    #[inline]
     fn parallel_encode(&mut self, data: &mut &[u8]) {
-        use core::arch::x86_64::*;
         let block = data.read_last_u128x4();
         let tail = [[block[0], block[1]], [block[2], block[3]]];
         let mut current: [[u128; 2]; 2] = [[self.key; 2]; 2];
@@ -152,7 +151,10 @@ impl AHasher {
             sum = shuffle_and_add_x2(sum, blocks[1]);
             *data = rest;
         }
-        self.hash_in_2(aesenc(current[0][0], current[0][1]), aesenc(current[1][0], current[1][1]));
+        self.hash_in_2(
+            aesenc(current[0][0], current[0][1]),
+            aesenc(current[1][0], current[1][1]),
+        );
         self.hash_in(add_by_64s(sum[0].convert(), sum[1].convert()).convert());
     }
 }
@@ -162,44 +164,10 @@ impl AHasher {
 /// [Hasher]: core::hash::Hasher
 impl Hasher for AHasher {
     #[inline]
-    fn write_u8(&mut self, i: u8) {
-        self.write_u64(i as u64);
-    }
-
-    #[inline]
-    fn write_u16(&mut self, i: u16) {
-        self.write_u64(i as u64);
-    }
-
-    #[inline]
-    fn write_u32(&mut self, i: u32) {
-        self.write_u64(i as u64);
-    }
-
-    #[inline]
-    fn write_u128(&mut self, i: u128) {
-        self.hash_in(i);
-    }
-
-    #[inline]
-    #[cfg(any(
-        target_pointer_width = "64",
-        target_pointer_width = "32",
-        target_pointer_width = "16"
-    ))]
-    fn write_usize(&mut self, i: usize) {
-        self.write_u64(i as u64);
-    }
-
-    #[inline]
-    #[cfg(target_pointer_width = "128")]
-    fn write_usize(&mut self, i: usize) {
-        self.write_u128(i as u128);
-    }
-
-    #[inline]
-    fn write_u64(&mut self, i: u64) {
-        self.write_u128(i as u128);
+    fn finish(&self) -> u64 {
+        let combined = aesdec(self.sum, self.enc);
+        let result: [u64; 2] = aesenc(aesenc(combined, self.key), combined).convert();
+        result[0]
     }
 
     #[inline]
@@ -236,11 +204,45 @@ impl Hasher for AHasher {
             }
         }
     }
+
     #[inline]
-    fn finish(&self) -> u64 {
-        let combined = aesdec(self.sum, self.enc);
-        let result: [u64; 2] = aesenc(aesenc(combined, self.key), combined).convert();
-        result[0]
+    fn write_u8(&mut self, i: u8) {
+        self.write_u64(i as u64);
+    }
+
+    #[inline]
+    fn write_u16(&mut self, i: u16) {
+        self.write_u64(i as u64);
+    }
+
+    #[inline]
+    fn write_u32(&mut self, i: u32) {
+        self.write_u64(i as u64);
+    }
+
+    #[inline]
+    fn write_u64(&mut self, i: u64) {
+        self.write_u128(i as u128);
+    }
+
+    #[inline]
+    fn write_u128(&mut self, i: u128) {
+        self.hash_in(i);
+    }
+
+    #[inline]
+    #[cfg(any(
+        target_pointer_width = "64",
+        target_pointer_width = "32",
+        target_pointer_width = "16"
+    ))]
+    fn write_usize(&mut self, i: usize) {
+        self.write_u64(i as u64);
+    }
+    #[inline]
+    #[cfg(target_pointer_width = "128")]
+    fn write_usize(&mut self, i: usize) {
+        self.write_u128(i as u128);
     }
 }
 

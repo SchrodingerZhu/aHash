@@ -79,7 +79,8 @@ If for some reason (such as fuzzing) an application wishes to supply all random 
 #![cfg_attr(feature = "specialize", feature(min_specialization))]
 #![cfg_attr(feature = "specialize", feature(build_hasher_simple_hash_one))]
 #![cfg_attr(feature = "stdsimd", feature(stdsimd))]
-
+#![cfg_attr(feature = "vaes", feature(simd_ffi))]
+#![cfg_attr(feature = "vaes", feature(link_llvm_intrinsics))]
 #[macro_use]
 mod convert;
 

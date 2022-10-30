@@ -64,7 +64,12 @@ pub(crate) fn shuffle(a: u128) -> u128 {
     }
 }
 
-#[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), feature = "vaes", not(miri)))]
+#[cfg(all(
+    any(target_arch = "x86", target_arch = "x86_64"),
+    target_feature = "avx512vaes",
+    feature = "vaes",
+    not(miri)
+))]
 #[allow(unused)]
 #[inline(always)]
 pub(crate) fn shuffle2(a: [u128; 2]) -> [u128; 2] {
@@ -91,7 +96,12 @@ pub(crate) fn shuffle_and_add(base: u128, to_add: u128) -> u128 {
     add_by_64s(shuffled, to_add.convert()).convert()
 }
 
-#[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), feature = "vaes", not(miri)))]
+#[cfg(all(
+    any(target_arch = "x86", target_arch = "x86_64"),
+    target_feature = "avx512vaes",
+    feature = "vaes",
+    not(miri)
+))]
 #[allow(unused)]
 #[inline(always)]
 pub(crate) fn shuffle_and_add_x2(base: [u128; 2], to_add: [u128; 2]) -> [u128; 2] {
@@ -118,34 +128,42 @@ pub(crate) fn add_by_64s(a: [u64; 2], b: [u64; 2]) -> [u64; 2] {
     [a[0].wrapping_add(b[0]), a[1].wrapping_add(b[1])]
 }
 
-#[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), feature = "vaes", not(miri)))]
+#[cfg(all(
+    any(target_arch = "x86", target_arch = "x86_64"),
+    target_feature = "avx512vaes",
+    feature = "vaes",
+    not(miri)
+))]
 #[allow(unused)]
 #[inline(always)]
 pub(crate) fn add_by_64x2s(a: [u128; 2], b: [u128; 2]) -> [u128; 2] {
     use core::arch::x86_64::_mm256_add_epi64;
-    use std::mem::transmute;
-    unsafe {
-        transmute(_mm256_add_epi64(transmute(a), transmute(b)))
-    }
+    use core::mem::transmute;
+    unsafe { transmute(_mm256_add_epi64(transmute(a), transmute(b))) }
 }
 
-
-
-#[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), feature = "vaes", not(miri)))]
+#[cfg(all(
+    any(target_arch = "x86", target_arch = "x86_64"),
+    target_feature = "avx512vaes",
+    feature = "vaes",
+    not(miri)
+))]
 #[allow(unused)]
 #[inline(always)]
 pub(crate) fn aesenc_x2(value: [u128; 2], xor: [u128; 2]) -> [u128; 2] {
+    // Several versions of rust library has marked vaes as AVX512 extensions.
+    // This effectively stop the compiler from inlining the intrinsics.
+    // To workaround the issue, we manually specify the VAES intrinsic.
+    // use core::arch::x86_64::_mm256_aesenc_epi128;
+    use core::arch::x86_64::__m256i;
     use core::arch::x86_64::_mm256_aesenc_epi128;
-    use std::arch::x86_64::__m256i;
-    use std::mem::transmute;
+    use core::mem::transmute;
+    #[allow(improper_ctypes)]
     extern "C" {
         #[link_name = "llvm.x86.aesni.aesenc.256"]
         fn aesenc_256(a: __m256i, round_key: __m256i) -> __m256i;
     }
-
-    unsafe {
-        transmute(_mm256_aesenc_epi128(transmute(value), transmute(xor)))
-    }
+    unsafe { transmute(aesenc_256(transmute(value), transmute(xor))) }
 }
 
 #[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "aes", not(miri)))]
